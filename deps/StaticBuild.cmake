@@ -726,7 +726,8 @@ function(sessiondep_build_external target)
         set(_default_cmake_args
             "-DCMAKE_INSTALL_PREFIX=${arg_PREFIX}"
             "-DCMAKE_INSTALL_LIBDIR=lib"
-            "-DCMAKE_BUILD_TYPE=Release")
+            "-DCMAKE_BUILD_TYPE=Release"
+            "-DCMAKE_POSITION_INDEPENDENT_CODE=ON")
         if(sessiondeps_cmake_toolchain_args)
             list(APPEND _default_cmake_args ${sessiondeps_cmake_toolchain_args})
         endif()
