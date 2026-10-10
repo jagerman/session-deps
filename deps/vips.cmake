@@ -111,7 +111,8 @@ sessiondep_static_target(sessiondep_ext_vips vips libvips.a
 # The C++ binding is a separate archive that calls into the C one, so it has to come first.
 sessiondep_static_target(sessiondep_ext_vips-cpp vips libvips-cpp.a sessiondep_ext_vips)
 
+# Never `include/vips` on the include path: its semaphore.h would shadow the system <semaphore.h>.
+# libvips' headers reach each other as <vips/...>, or quoted from beside themselves.
 foreach(tgt sessiondep_ext_vips sessiondep_ext_vips-cpp)
-    target_include_directories(${tgt} INTERFACE ${SESSIONDEPS_DESTDIR}/include/vips)
     set_target_properties(${tgt} PROPERTIES IMPORTED_LINK_INTERFACE_LANGUAGES CXX)
 endforeach()
