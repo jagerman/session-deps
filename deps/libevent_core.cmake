@@ -10,6 +10,16 @@ if(libevent_build_host MATCHES "(.*--host=)arm64-(.*)")
     set(libevent_build_host "${CMAKE_MATCH_1}aarch64-${CMAKE_MATCH_2}")
 endif()
 
+# Apple's 27 SDKs declare pipe2 as available from iOS/macOS 27 only. Configure's link test cannot
+# see availability, so it finds pipe2 and libevent then calls it unconditionally: with any older
+# deployment target the symbol is weakly linked and null below 27, and the first event loop crashes
+# at a call through a null pointer. The pipe() and fcntl() fallback costs nothing, so pipe2 is
+# never used on Apple platforms.
+set(libevent_configure_vars)
+if(APPLE)
+    list(APPEND libevent_configure_vars ac_cv_func_pipe2=no)
+endif()
+
 set(lib_pthreads ${SESSIONDEPS_DESTDIR}/lib/libevent_pthreads.a)
 if(WIN32)
     set(lib_pthreads)
@@ -25,6 +35,7 @@ sessiondep_build_external(libevent
     "CFLAGS=${sessiondeps_CFLAGS}"
     "CXXFLAGS=${sessiondeps_CXXFLAGS}"
     ${sessiondeps_cross_rc}
+    ${libevent_configure_vars}
     BUILD_BYPRODUCTS
     ${SESSIONDEPS_DESTDIR}/lib/libevent_core.a
     ${lib_pthreads}

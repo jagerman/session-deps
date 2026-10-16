@@ -9,7 +9,7 @@ include_guard(GLOBAL)
 # If different versions of this script gets loaded from different places we want to defer to the
 # functions set in the most recent version as it may have fixes or new deps in it that an older
 # version is missing, and so we let later versions overwrite the functions of earlier versions.
-set(session_deps_version 1.33)
+set(session_deps_version 1.34)
 
 get_property(_sdep_loaded_version GLOBAL PROPERTY _sdep_loaded_version)
 
