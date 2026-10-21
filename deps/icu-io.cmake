@@ -45,6 +45,9 @@ if(CMAKE_CROSSCOMPILING)
     set(icu_cross_build --with-cross-build=${icu_native_root} --disable-tools)
 endif()
 
+# -fPIC is ours to give: ICU does not use libtool, so there is no --with-pic, and it compiles the
+# objects for its static archives with only STATICCFLAGS, which is empty on Linux.  A PIE-default
+# compiler hides this until the archives are linked into a shared object.
 sessiondep_build_external(icu-io
     ${icu_native_dep}
     PATCHES icu-mingw-static-libraries-without-s.patch icu-mingw-static-library-names.patch
@@ -56,9 +59,9 @@ sessiondep_build_external(icu-io
         --prefix=${SESSIONDEPS_DESTDIR}
         CC=${sessiondeps_cc}
         CXX=${sessiondeps_cxx}
-        "CFLAGS=${sessiondeps_CFLAGS}"
-        "CXXFLAGS=${sessiondeps_CXXFLAGS}"
-    BUILD_COMMAND 
+        "CFLAGS=${sessiondeps_CFLAGS} -fPIC"
+        "CXXFLAGS=${sessiondeps_CXXFLAGS} -fPIC"
+    BUILD_COMMAND
         ${CMAKE_COMMAND} -E env ${libicu_feature_excludes}
         ${sessiondeps_make}
     BUILD_BYPRODUCTS
