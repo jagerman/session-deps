@@ -100,6 +100,8 @@ sessiondep_build_external(vips
       ${SESSIONDEPS_DESTDIR}/include/vips/vips.h
 )
 
+# Never add `include/vips` to these targets' include path: its semaphore.h would shadow the system
+# <semaphore.h>.  libvips' headers reach each other as <vips/...>, or quoted from beside themselves.
 sessiondep_static_target(sessiondep_ext_vips vips libvips.a
     sessiondep::glib-2.0 sessiondep::gobject-2.0 sessiondep::gio-2.0 sessiondep::gmodule-2.0
     sessiondep::expat
@@ -111,8 +113,5 @@ sessiondep_static_target(sessiondep_ext_vips vips libvips.a
 # The C++ binding is a separate archive that calls into the C one, so it has to come first.
 sessiondep_static_target(sessiondep_ext_vips-cpp vips libvips-cpp.a sessiondep_ext_vips)
 
-# Never `include/vips` on the include path: its semaphore.h would shadow the system <semaphore.h>.
-# libvips' headers reach each other as <vips/...>, or quoted from beside themselves.
-foreach(tgt sessiondep_ext_vips sessiondep_ext_vips-cpp)
-    set_target_properties(${tgt} PROPERTIES IMPORTED_LINK_INTERFACE_LANGUAGES CXX)
-endforeach()
+set_target_properties(sessiondep_ext_vips sessiondep_ext_vips-cpp PROPERTIES
+    IMPORTED_LINK_INTERFACE_LANGUAGES CXX)
