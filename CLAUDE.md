@@ -5,8 +5,8 @@ Builds the Session projects' C/C++ dependencies from source, statically, for Lin
 project includes `Deps.cmake` and asks for what it needs with `session_dep()`, which finds a suitable
 system package or falls back to building one here.
 
-CI covers only Linux, macOS and mingw — the Android and iOS paths are exercised by whoever builds
-them, so code guarded by `ANDROID` or an Apple SDK check can rot unnoticed.
+CI builds Android and iOS but cannot run what it builds for them, so code guarded by `ANDROID` or an
+Apple SDK check that compiles and links can still be broken at runtime without anyone noticing.
 
 `README.md` documents the user-facing side — the cmake options, `session_dep()`, how to add a
 package, and `check/PKG.cmake` system-package rejection.  Read it first; this file is what it does
@@ -23,7 +23,7 @@ not say.
 | `deps/extra/` | other files a recipe uses: helper scripts, vendored files; outside the recipe glob |
 | `check/PKG.cmake` | optional veto on an otherwise acceptable system package |
 | `test/` | a project that builds every recipe and uses each one; what CI runs |
-| `.drone.jsonnet` | CI pipelines |
+| `.woodpecker/build.star` | CI workflows |
 
 ## Recipes
 
@@ -181,7 +181,7 @@ recipe built, so the calls follow `SKIP_DEPS`.
 The glob covers building, but the calls in `main.cpp` are written by hand, so **a new recipe gets
 built and linked with nothing exercising it until someone adds one**.  Add the call with the recipe.
 
-    cmake -S test -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DLOCAL_MIRROR=https://oxen.rocks/deps
+    cmake -S test -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DLOCAL_MIRROR=https://builds.session.codes/deps
     ninja -C build
 
 `-DSKIP_DEPS='libfoo;libbar'` drops recipes; it lives in the CI job rather than in the cmake so a
@@ -194,10 +194,10 @@ per CI round trip.
 
 ## CI
 
-`.drone.jsonnet` — seven pipelines: Debian sid/bookworm/trixie, Ubuntu jammy, mingw cross, macOS
-arm and intel.  Run `jsonnetfmt --test .drone.jsonnet` after editing.
+Woodpecker, configured by `.woodpecker/build.star` (Starlark, evaluated by our
+session-woodpecker-config extension).  One workflow per platform: Debian sid, bookworm (arm64) and
+trixie (armhf), Ubuntu jammy, mingw cross, macOS arm and intel, Android (arm64-v8a, armeabi-v7a,
+x86_64) and iOS (device, simulator).  Each builds `test/` and runs `deps-test` where the agent can
+execute it: natively, or under wine for mingw.  The Android and iOS workflows only build.
 
-The arm builders run out of memory above 4 concurrent compiles, so those pipelines pass `jobs=4`.
-
-CI builds `deps-test` but does not run it, so runtime breakage in a library that links fine is not
-currently caught.
+The arm builders run out of memory above 4 concurrent compiles, so those workflows pass `jobs = 4`.

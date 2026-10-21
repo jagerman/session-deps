@@ -70,7 +70,7 @@ ignore system libs and use a submodule.
 
 This can be set to a mirror to check first for downloads, with fallback to the upstream download
 URL, when download static sources.  For instance, CI jobs for Session projects typically set this to
-https://oxen.rocks/deps/.  (Note that source files are hashed and verified, so use of a local mirror
+https://builds.session.codes/deps/.  (Note that source files are hashed and verified, so use of a local mirror
 does not allow modified source packages).
 
 ### `SUBMODULE_CHECK`
