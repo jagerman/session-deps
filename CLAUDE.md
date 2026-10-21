@@ -198,6 +198,8 @@ Woodpecker, configured by `.woodpecker/build.star` (Starlark, evaluated by our
 session-woodpecker-config extension).  One workflow per platform: Debian sid, bookworm (arm64) and
 trixie (armhf), Ubuntu jammy, mingw cross, macOS arm and intel, Android (arm64-v8a, armeabi-v7a,
 x86_64) and iOS (device, simulator).  Each builds `test/` and runs `deps-test` where the agent can
-execute it: natively, or under wine for mingw.  The Android and iOS workflows only build.
+execute it: natively, or under wine for mingw.  The Android and iOS workflows only build.  The ELF
+ones, Linux and Android, also build `check-pic`, which links each archive whole into a shared object
+of its own: everything here ends up inside one, and `deps-test` is an executable.
 
 The arm builders run out of memory above 4 concurrent compiles, so those workflows pass `jobs = 4`.

@@ -56,7 +56,10 @@ def cmake_args(opts):
 # Running deps-test is the point of it: building only proves the recipes compiled, while the run
 # calls into every library and is what catches one that links but does not work.  A cross build
 # that the CI machine cannot execute passes run_test = None and gets the build only.
-def build_commands(cmake, jobs, run_test):
+#
+# check-pic links each archive into a shared object, which is where they all end up and which
+# deps-test, an executable, cannot show.  It exists only where the target is ELF.
+def build_commands(cmake, jobs, run_test, pic_check):
     opts = dict(default_cmake)
     opts.update(cmake)
     cmds = [
@@ -65,6 +68,8 @@ def build_commands(cmake, jobs, run_test):
         "cmake ../test -G Ninja " + cmake_args(opts),
         "ninja -j%d -v" % jobs,
     ]
+    if pic_check:
+        cmds.append("ninja -j%d -v check-pic" % jobs)
     if run_test:
         cmds.append(run_test)
     return cmds
@@ -91,7 +96,8 @@ def linux(
         backports = None,
         meson_pip = None,
         cmake = {},
-        run_test = "./deps-test"):
+        run_test = "./deps-test",
+        pic_check = True):
     meson = "meson"
     if backports:
         meson = "meson/%s-backports" % backports
@@ -108,13 +114,13 @@ def linux(
     ]
     if meson_pip:
         cmds.append("pip3 install --no-cache-dir meson==" + meson_pip)
-    return workflow(name, "linux/" + arch, registry + image, cmds + build_commands(cmake, jobs, run_test))
+    return workflow(name, "linux/" + arch, registry + image, cmds + build_commands(cmake, jobs, run_test, pic_check))
 
 def macos(name, arch, cmake = {}, run_test = "./deps-test"):
     return workflow(name, "darwin/" + arch, "sh", [
         # Without this the C compiler has no include path containing basic system headers.
         'export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"',
-    ] + build_commands(cmake, 6, run_test))
+    ] + build_commands(cmake, 6, run_test, pic_check = False))
 
 # The image has the NDK, which ships the toolchain file, at this path.
 android_ndk = "/usr/lib/android-ndk"
@@ -155,6 +161,7 @@ def main(ctx):
             pkgs = ["g++-mingw-w64-x86-64-posix", "wine"],
             cmake = {"CMAKE_TOOLCHAIN_FILE": "../test/cross/mingw-x64.cmake"},
             run_test = "WINEDEBUG=-all wine ./deps-test.exe",
+            pic_check = False,
         ),
 
         macos("macOS (ARM)", "arm64"),

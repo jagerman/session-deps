@@ -98,3 +98,61 @@ if(TARGET sessiondep::gnutls)
     target_compile_definitions(deps-test-gnutls PRIVATE HAVE_DEP_GNUTLS)
     target_compile_features(deps-test-gnutls PRIVATE cxx_std_20)
 endif()
+
+# Our archives end up inside shared objects -- libsession in an Android .so, an iOS framework, a Node
+# addon -- so every object in them has to be position-independent.  deps-test is an executable, and a
+# PIE-default compiler produces code that links into one fine but not into a shared object, so link
+# each archive whole into a shared object of its own.  Undefined symbols are allowed (the Android
+# toolchain forbids them by default): the linker rejects a non-PIC relocation whether or not its
+# symbol resolves, and resolving them would mean pulling in the rest of the link.
+#
+# Not built by default; CI runs it after the build.  ELF only: Mach-O is always PIC and PE has no
+# such distinction.
+if(NOT APPLE AND NOT WIN32)
+    add_custom_target(check-pic)
+
+    set(pic_archives)
+    set(seen)
+    set(queue ${dep_targets})
+    while(queue)
+        list(POP_FRONT queue item)
+        if(item MATCHES "^\\$<LINK_ONLY:(.*)>$")
+            set(item "${CMAKE_MATCH_1}")
+        endif()
+        if(NOT TARGET "${item}" OR item IN_LIST seen)
+            continue()
+        endif()
+        list(APPEND seen ${item})
+
+        get_target_property(alias ${item} ALIASED_TARGET)
+        if(alias)
+            list(APPEND queue ${alias})
+            continue()
+        endif()
+        get_target_property(type ${item} TYPE)
+        get_target_property(imported ${item} IMPORTED)
+        if(type STREQUAL "STATIC_LIBRARY" AND imported)
+            list(APPEND pic_archives ${item})
+        endif()
+        get_target_property(linked ${item} INTERFACE_LINK_LIBRARIES)
+        if(linked)
+            list(APPEND queue ${linked})
+        endif()
+    endwhile()
+
+    foreach(archive IN LISTS pic_archives)
+        get_target_property(location ${archive} IMPORTED_LOCATION)
+        get_filename_component(name "${location}" NAME_WE)
+        add_library(pic-check-${name} SHARED EXCLUDE_FROM_ALL pic-check.c)
+        # The path rather than the target, so that only this archive is linked and not everything it
+        # depends on; the target is still what makes the archive get built first.
+        target_link_libraries(pic-check-${name} PRIVATE
+            -Wl,--whole-archive "${location}" -Wl,--no-whole-archive)
+        target_link_options(pic-check-${name} PRIVATE -Wl,-z,undefs)
+        add_dependencies(pic-check-${name} ${archive})
+        add_dependencies(check-pic pic-check-${name})
+    endforeach()
+
+    list(LENGTH pic_archives pic_count)
+    message(STATUS "session-deps test: check-pic covers ${pic_count} archives")
+endif()
