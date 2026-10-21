@@ -62,14 +62,21 @@ def cmake_args(opts):
 # each into a shared object, which is where they all end up and which deps-test, an executable,
 # cannot show, and exists only where the target is ELF; check-weak-imports fails on a function newer
 # than the deployment target, and exists only on Apple.
-def build_commands(cmake, jobs, run_test, checks):
+#
+# uname_audit builds under strace and fails on any build script that asks what the build machine is
+# without having been reviewed: a cross build that decides its target from the build machine works
+# from Linux and breaks from a mac, which no mac workflow here would catch.  See test/uname-audit.py.
+def build_commands(cmake, jobs, run_test, pic_check, uname_audit = False):
     opts = dict(default_cmake)
     opts.update(cmake)
+    build = "ninja -j%d -v" % jobs
+    if uname_audit:
+        build = "../test/uname-audit.py " + build
     cmds = [
         "mkdir build",
         "cd build",
         "cmake ../test -G Ninja " + cmake_args(opts),
-        "ninja -j%d -v" % jobs,
+        build,
     ]
     for check in checks:
         cmds.append("ninja -j%d -v %s" % (jobs, check))
@@ -100,8 +107,11 @@ def linux(
         meson_pip = None,
         cmake = {},
         run_test = "./deps-test",
-        checks = ["check-pic"]):
+        checks = ["check-pic"],
+        uname_audit = False):
     meson = "meson"
+    if uname_audit:
+        pkgs = pkgs + ["strace"]
     if backports:
         meson = "meson/%s-backports" % backports
     elif meson_pip:
@@ -117,7 +127,7 @@ def linux(
     ]
     if meson_pip:
         cmds.append("pip3 install --no-cache-dir meson==" + meson_pip)
-    return workflow(name, "linux/" + arch, registry + image, cmds + build_commands(cmake, jobs, run_test, checks))
+    return workflow(name, "linux/" + arch, registry + image, cmds + build_commands(cmake, jobs, run_test, checks, uname_audit))
 
 def macos(name, arch, cmake = {}, run_test = "./deps-test"):
     return workflow(name, "darwin/" + arch, "sh", [
@@ -157,7 +167,8 @@ def main(ctx):
         # armhf is built on an arm64 machine, as the 32-bit runners are.
         linux("Debian trixie (armhf)", "debian-trixie/arm32v7", arch = "arm64", jobs = 4),
 
-        # The test binary is built static, so wine can run it without the cross toolchain's DLLs.
+        # The test binary is built static, so wine can run it without the cross toolchain's DLLs.  The
+        # uname audit needs a cross build, and this is the one that builds every recipe.
         linux(
             "Windows x64 (mingw)",
             "debian-sid",
@@ -165,6 +176,7 @@ def main(ctx):
             cmake = {"CMAKE_TOOLCHAIN_FILE": "../test/cross/mingw-x64.cmake"},
             run_test = "WINEDEBUG=-all wine ./deps-test.exe",
             checks = [],
+            uname_audit = True,
         ),
 
         macos("macOS (ARM)", "arm64"),
