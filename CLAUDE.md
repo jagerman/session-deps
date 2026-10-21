@@ -141,6 +141,13 @@ tool built for the build machine making decisions with `#if` on *its* platform w
 target's settings — ICU's `pkgdata` names the data library that way and silently produces one nobody
 installs.  When a cross build misbehaves, ask which machine the deciding code was compiled for.
 
+**A build script that asks `uname` is describing the build machine, whatever it meant to ask.**
+zlib's configure took its platform from `uname -s` instead of `--host`; from Linux the answer
+happened to pick a branch that worked for Android and mingw, and from a mac it archived Android
+objects with Apple's libtool.  Darwin is the build machine scripts single out, so these bugs pass
+every Linux-hosted cross build and fail on a developer's mac.  The mingw workflow catches the
+question instead of the failure; see CI.
+
 **An optional dependency left at its default is a system library waiting to leak in.**  On a native
 build the pkg-config search path is our destdir *followed by the system's*, so that a static
 libvips can sit on a system glib.  The cost is that any recipe which leaves an optional dependency
@@ -201,5 +208,16 @@ x86_64) and iOS (device, simulator).  Each builds `test/` and runs `deps-test` w
 execute it: natively, or under wine for mingw.  The Android and iOS workflows only build.  The ELF
 ones, Linux and Android, also build `check-pic`, which links each archive whole into a shared object
 of its own: everything here ends up inside one, and `deps-test` is an executable.
+
+The mingw workflow builds under `test/uname-audit.py`, which traces the build with strace and fails
+on any script that asks about the build machine — `uname`, `arch`, Perl's `POSIX::uname`, Python's
+`platform` — other than the expected ones (autoconf's `config.log` header, `config.guess`, cmake and
+meson).  It sees that a script asked, not what it did with the answer, so a new finding means
+reading the script.  Fix the recipe if the answer decides anything about the target (`--uname` for
+zlib; a preset cache variable where configure caches the check; a patch).  If it only matters on a
+build machine nobody uses, add it to `KNOWN` in the script with the reason.  A known entry that is
+no longer asked fails the audit too, so drop it after a version bump removes the question.  Run it
+locally with `../test/uname-audit.py ninja` in a mingw build directory, or `--log` to re-read a
+trace.
 
 The arm builders run out of memory above 4 concurrent compiles, so those workflows pass `jobs = 4`.
