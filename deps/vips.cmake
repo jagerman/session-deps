@@ -33,7 +33,7 @@ session_dep(imagequant 2)
 sessiondep_providers_meson_args(vips_providers_meson)
 
 sessiondep_build_external(vips
-    PATCHES vips-no-tools-test-fuzz.patch
+    PATCHES vips-no-tools-test-fuzz.patch vips-heif-reader-int64.patch
     CONFIGURE_COMMAND DEFAULT_MESON
       # --- core ---
       -Ddeprecated=false

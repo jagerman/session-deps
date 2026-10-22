@@ -1,0 +1,44 @@
+heifload's libheif reader callbacks are declared with glib's gint64 where libheif's struct
+heif_reader declares int64_t.  The two are normally the same type, but MacPorts' glib2 hard-codes
+gint64 as `long` on LP64 (its universal.patch, applied whether or not +universal is set) while
+int64_t on Apple is `long long`, and current clang rejects the mismatched function pointers as an
+error (-Wincompatible-function-pointer-types).  So libvips fails to build against MacPorts' glib,
+which arrives as a dependency of much of MacPorts and is then picked up as the system glib.
+
+Declaring the callbacks with the types libheif's API actually uses is correct whatever glib does,
+and changes nothing where gint64 and int64_t already agree.  The bodies pass these values straight
+on to vips_source_seek(), a conversion between two signed 64-bit types.
+
+Upstream: https://github.com/libvips/libvips/issues/3901 (the same errors from a misconfigured
+Homebrew glib, closed once Homebrew fixed its glib; libvips was not changed).  MacPorts:
+https://trac.macports.org/ticket/69549 and https://trac.macports.org/ticket/72748.
+
+--- a/libvips/foreign/heifload.c
++++ b/libvips/foreign/heifload.c
+@@ -1132,7 +1132,7 @@
+ #endif
+ }
+
+-static gint64
++static int64_t
+ vips_foreign_load_heif_get_position(void *userdata)
+ {
+ 	VipsForeignLoadHeif *heif = (VipsForeignLoadHeif *) userdata;
+@@ -1165,7 +1165,7 @@
+ }
+
+ static int
+-vips_foreign_load_heif_seek(gint64 position, void *userdata)
++vips_foreign_load_heif_seek(int64_t position, void *userdata)
+ {
+ 	VipsForeignLoadHeif *heif = (VipsForeignLoadHeif *) userdata;
+
+@@ -1178,7 +1178,7 @@
+  * check it is OK".
+  */
+ static enum heif_reader_grow_status
+-vips_foreign_load_heif_wait_for_file_size(gint64 target_size, void *userdata)
++vips_foreign_load_heif_wait_for_file_size(int64_t target_size, void *userdata)
+ {
+ 	VipsForeignLoadHeif *heif = (VipsForeignLoadHeif *) userdata;
+
