@@ -517,6 +517,11 @@ if(CMAKE_CROSSCOMPILING)
     endforeach()
 
     set(_sdep_meson_extra_bins "")
+    # glib requires an Objective-C compiler when building for macOS (not the other Apple platforms),
+    # and in a cross build meson takes it only from here.  clang is one.
+    if(_sdep_meson_system STREQUAL "darwin")
+        string(APPEND _sdep_meson_extra_bins "objc = [${_sdep_meson_cc}]\n")
+    endif()
     if(CMAKE_AR)
         string(APPEND _sdep_meson_extra_bins "ar = '${CMAKE_AR}'\n")
     endif()
