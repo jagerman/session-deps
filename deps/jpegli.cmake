@@ -58,9 +58,7 @@ sessiondep_build_external(jpegli
       -DJPEGLI_FORCE_SYSTEM_LCMS2=ON
       ${jpegli_dep_args}
     # The core library is EXCLUDE_FROM_ALL and has no install rule, so it is built by name and its
-    # API headers installed by hand.  They go under include/jpegli, which consumers must search
-    # ahead of include/: jpegli's headers include <jpeglib.h> expecting its own copy (installed
-    # alongside), and libjpeg-turbo's is in include/.
+    # API headers installed by hand, under include/jpegli; see below for why they are kept apart.
     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target jpegli-static
     INSTALL_COMMAND
       ${CMAKE_COMMAND} -E make_directory ${jpegli_include}/lib/jpegli ${jpegli_include}/lib/base
@@ -79,6 +77,17 @@ sessiondep_build_external(jpegli
       ${jpegli_include}/lib/jpegli/encode.h
 )
 
-sessiondep_static_simple(jpegli sessiondep::libhwy Threads::Threads)
+# jpegli's headers include <jpeglib.h> expecting its own copy, installed alongside them, and the
+# struct sizes it checks at runtime depend on that copy's JPEG_LIB_VERSION -- 62 here, where a
+# libjpeg-turbo built with the libjpeg 8 API (MacPorts') says 80, and jpegli then refuses every
+# call.  So its directory has to win over every other jpeglib.h: libjpeg-turbo's in our include/, or
+# a system one that any other dependency's include directory can bring in (/opt/local/include).
+#
+# -I is searched before every -isystem, which settles that regardless of order, but cmake makes an
+# IMPORTED target's include directories -isystem (overridable only from 3.23).  Those of a plain
+# INTERFACE library stay -I, so the headers get one of their own.
+add_library(sessiondep_ext_jpegli_headers INTERFACE)
+target_include_directories(sessiondep_ext_jpegli_headers INTERFACE ${jpegli_include})
+
+sessiondep_static_simple(jpegli sessiondep_ext_jpegli_headers sessiondep::libhwy Threads::Threads)
 set_target_properties(sessiondep_ext_jpegli PROPERTIES IMPORTED_LINK_INTERFACE_LANGUAGES CXX)
-target_include_directories(sessiondep_ext_jpegli BEFORE INTERFACE ${jpegli_include})
