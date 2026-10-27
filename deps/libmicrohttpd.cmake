@@ -22,6 +22,14 @@ if(WIN32)
     set(mhd_gnutls_static_cppflags " -DGNUTLS_INTERNAL_BUILD")
 endif()
 
+# Apple's 27 SDKs declare pipe2 as available from iOS/macOS 27 only, and configure's check cannot see
+# availability, so with any older deployment target the daemon would call a weakly linked pipe2 that
+# is null below 27.  Its pipe() and fcntl() fallback is used wherever pipe2 is missing.
+set(mhd_configure_vars)
+if(APPLE)
+    list(APPEND mhd_configure_vars mhd_cv_works_func_pipe2=no)
+endif()
+
 # Only the core HTTP(S) server is built: the authentication, form post-processing, cookie and
 # HTTP-upgrade layers are optional features that nothing here uses, and each is request-parsing
 # surface that has had its own security fixes.
@@ -43,6 +51,7 @@ sessiondep_build_external(libmicrohttpd
     "CC=${sessiondeps_cc}" "CXX=${sessiondeps_cxx}"
     "CFLAGS=${sessiondeps_CFLAGS}" "CXXFLAGS=${sessiondeps_CXXFLAGS}"
     ${sessiondeps_cross_rc}
+    ${mhd_configure_vars}
     DEPENDS sessiondep::gnutls
     # In epoll mode a TLS handshake that has to wait for the client leaves the connection marked
     # read-ready, so the daemon busy-waits and re-runs the handshake until the client's next

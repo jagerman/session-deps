@@ -169,6 +169,16 @@ a flag whose handling sits inside a conditional is accepted and ignored with no 
 (`--without-ssl` does nothing for unbound once `--with-nettle` is given).  Check that a flag reaches
 `config.h`/`configdata.pm` rather than assuming.
 
+**Autoconf cannot see Apple API availability.**  The SDK declares functions with the OS version that
+introduced them, and a deployment target older than that makes every call a weak import that is
+null on the older OS.  A configure link test still succeeds, so the library calls the function
+unguarded and crashes there: `pipe2` (iOS/macOS 27) in libevent and libmicrohttpd, `strchrnul`
+(18.4) in libidn2.  On `APPLE`, preset the configure cache variable that check sets, which is not
+always `ac_cv_func_NAME`: libmicrohttpd's is `mhd_cv_works_func_pipe2`, and where gnulib has a
+`gl_cv_onwards_func_NAME` check, `=future` is the result gnulib itself gives for a function too new
+for the target, and the only one that makes callers use its replacement.  `check-weak-imports`
+finds the next one.
+
 **`deps/sqlite3.cmake` is an alias** that bundles `sqlite3mc`; there is no separate stock sqlite3
 build.
 
