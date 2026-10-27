@@ -210,6 +210,9 @@ trixie (armhf), Ubuntu jammy, mingw cross, macOS arm and intel, Android (arm64-v
 x86_64) and iOS (device, simulator).  Each builds `test/` and runs `deps-test` where the agent can
 execute it: natively, or under wine for mingw.  The Android and iOS workflows only build.  The ELF
 ones, Linux and Android, also build `check-pic`, which links each archive whole into a shared object
-of its own: everything here ends up inside one, and `deps-test` is an executable.
+of its own: everything here ends up inside one, and `deps-test` is an executable.  The Apple ones
+build `check-weak-imports`, which fails on any weak import not on its allowlist in
+`test/CMakeLists.txt`: a function newer than the deployment target, which the iOS workflows (target
+13) can find and the macOS ones, built for the SDK's own version, cannot.
 
 The arm builders run out of memory above 4 concurrent compiles, so those workflows pass `jobs = 4`.
