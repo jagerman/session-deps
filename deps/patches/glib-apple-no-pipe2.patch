@@ -1,0 +1,22 @@
+Applied on Apple only: stops glib calling pipe2(), which Apple SDKs declare only from iOS/macOS 27.
+
+glib checks its `functions` list with a bare cc.has_function(f), which links against a prototype
+of meson's own rather than the SDK's declaration, so it cannot see API availability.  Built with
+an SDK of 27 or later it therefore sets HAVE_PIPE2 whatever the deployment target, and
+g_unix_open_pipe() (glib-unixprivate.h) calls pipe2() unguarded: a weak import that is null on an
+older OS.  Under -Werror=unguarded-availability-new the call is a compile error instead.
+
+Meson has no cache variable to preset, unlike autoconf, so pipe2 comes off the list.  Without
+HAVE_PIPE2 g_unix_open_pipe() uses pipe() and fcntl(FD_CLOEXEC), its path on every platform that
+lacks pipe2.
+
+--- a/meson.build
++++ b/meson.build
+@@ -748,7 +748,6 @@
+   'memmem',
+   'mmap',
+   'newlocale',
+-  'pipe2',
+   'poll',
+   'prlimit',
+   'readlink',

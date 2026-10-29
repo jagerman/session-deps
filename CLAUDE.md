@@ -176,8 +176,9 @@ unguarded and crashes there: `pipe2` (iOS/macOS 27) in libevent and libmicrohttp
 (18.4) in libidn2.  On `APPLE`, preset the configure cache variable that check sets, which is not
 always `ac_cv_func_NAME`: libmicrohttpd's is `mhd_cv_works_func_pipe2`, and where gnulib has a
 `gl_cv_onwards_func_NAME` check, `=future` is the result gnulib itself gives for a function too new
-for the target, and the only one that makes callers use its replacement.  `check-weak-imports`
-finds the next one.
+for the target, and the only one that makes callers use its replacement.  Meson's bare
+`cc.has_function(f)` is just as blind and has no cache variable to preset, so glib's `pipe2` is
+patched off its function list on Apple.  `check-weak-imports` finds the next one.
 
 **`deps/sqlite3.cmake` is an alias** that bundles `sqlite3mc`; there is no separate stock sqlite3
 build.
