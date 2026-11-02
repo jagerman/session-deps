@@ -51,12 +51,20 @@ if(APPLE)
     endif()
 endif()
 
+# Apple SDKs declare pipe2 only from iOS/macOS 27, and glib's has_function check cannot see that;
+# the patch says why it takes pipe2 off the list rather than presetting a result.
+set(glib_patches "")
+if(APPLE)
+    set(glib_patches PATCHES glib-apple-no-pipe2.patch)
+endif()
+
 # Consumers reach glib's build tools through glib-2.0.pc's own `glib_mkenums` and `glib_genmarshal`
 # variables, and meson treats a path there that does not exist as a fatal packaging error rather
 # than falling back to one on PATH -- so those tools have to be installed even though nothing runs
 # them by hand.  They are Python, so a cross build can execute them; glib-compile-resources is an
 # ELF binary built for the target, so anything calling gnome.compile_resources() will not cross.
 sessiondep_build_external(glib-2.0
+    ${glib_patches}
     CONFIGURE_COMMAND DEFAULT_MESON
       -Dtests=false
       -Dinstalled_tests=false

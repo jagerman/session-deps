@@ -57,9 +57,11 @@ def cmake_args(opts):
 # calls into every library and is what catches one that links but does not work.  A cross build
 # that the CI machine cannot execute passes run_test = None and gets the build only.
 #
-# check-pic links each archive into a shared object, which is where they all end up and which
-# deps-test, an executable, cannot show.  It exists only where the target is ELF.
-def build_commands(cmake, jobs, run_test, pic_check):
+# `checks` are test/'s targets that inspect the archives rather than link deps-test: check-pic links
+# each into a shared object, which is where they all end up and which deps-test, an executable,
+# cannot show, and exists only where the target is ELF; check-weak-imports fails on a function newer
+# than the deployment target, and exists only on Apple.
+def build_commands(cmake, jobs, run_test, checks):
     opts = dict(default_cmake)
     opts.update(cmake)
     cmds = [
@@ -68,8 +70,8 @@ def build_commands(cmake, jobs, run_test, pic_check):
         "cmake ../test -G Ninja " + cmake_args(opts),
         "ninja -j%d -v" % jobs,
     ]
-    if pic_check:
-        cmds.append("ninja -j%d -v check-pic" % jobs)
+    for check in checks:
+        cmds.append("ninja -j%d -v %s" % (jobs, check))
     if run_test:
         cmds.append(run_test)
     return cmds
@@ -97,7 +99,7 @@ def linux(
         meson_pip = None,
         cmake = {},
         run_test = "./deps-test",
-        pic_check = True):
+        checks = ["check-pic"]):
     meson = "meson"
     if backports:
         meson = "meson/%s-backports" % backports
@@ -114,13 +116,13 @@ def linux(
     ]
     if meson_pip:
         cmds.append("pip3 install --no-cache-dir meson==" + meson_pip)
-    return workflow(name, "linux/" + arch, registry + image, cmds + build_commands(cmake, jobs, run_test, pic_check))
+    return workflow(name, "linux/" + arch, registry + image, cmds + build_commands(cmake, jobs, run_test, checks))
 
 def macos(name, arch, cmake = {}, run_test = "./deps-test"):
     return workflow(name, "darwin/" + arch, "sh", [
         # Without this the C compiler has no include path containing basic system headers.
         'export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"',
-    ] + build_commands(cmake, 6, run_test, pic_check = False))
+    ] + build_commands(cmake, 6, run_test, checks = ["check-weak-imports"]))
 
 # The image has the NDK, which ships the toolchain file, at this path.
 android_ndk = "/usr/lib/android-ndk"
@@ -161,7 +163,7 @@ def main(ctx):
             pkgs = ["g++-mingw-w64-x86-64-posix", "wine"],
             cmake = {"CMAKE_TOOLCHAIN_FILE": "../test/cross/mingw-x64.cmake"},
             run_test = "WINEDEBUG=-all wine ./deps-test.exe",
-            pic_check = False,
+            checks = [],
         ),
 
         macos("macOS (ARM)", "arm64"),

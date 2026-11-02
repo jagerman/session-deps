@@ -169,6 +169,17 @@ a flag whose handling sits inside a conditional is accepted and ignored with no 
 (`--without-ssl` does nothing for unbound once `--with-nettle` is given).  Check that a flag reaches
 `config.h`/`configdata.pm` rather than assuming.
 
+**Autoconf cannot see Apple API availability.**  The SDK declares functions with the OS version that
+introduced them, and a deployment target older than that makes every call a weak import that is
+null on the older OS.  A configure link test still succeeds, so the library calls the function
+unguarded and crashes there: `pipe2` (iOS/macOS 27) in libevent and libmicrohttpd, `strchrnul`
+(18.4) in libidn2.  On `APPLE`, preset the configure cache variable that check sets, which is not
+always `ac_cv_func_NAME`: libmicrohttpd's is `mhd_cv_works_func_pipe2`, and where gnulib has a
+`gl_cv_onwards_func_NAME` check, `=future` is the result gnulib itself gives for a function too new
+for the target, and the only one that makes callers use its replacement.  Meson's bare
+`cc.has_function(f)` is just as blind and has no cache variable to preset, so glib's `pipe2` is
+patched off its function list on Apple.  `check-weak-imports` finds the next one.
+
 **`deps/sqlite3.cmake` is an alias** that bundles `sqlite3mc`; there is no separate stock sqlite3
 build.
 
@@ -200,6 +211,9 @@ trixie (armhf), Ubuntu jammy, mingw cross, macOS arm and intel, Android (arm64-v
 x86_64) and iOS (device, simulator).  Each builds `test/` and runs `deps-test` where the agent can
 execute it: natively, or under wine for mingw.  The Android and iOS workflows only build.  The ELF
 ones, Linux and Android, also build `check-pic`, which links each archive whole into a shared object
-of its own: everything here ends up inside one, and `deps-test` is an executable.
+of its own: everything here ends up inside one, and `deps-test` is an executable.  The Apple ones
+build `check-weak-imports`, which fails on any weak import not on its allowlist in
+`test/CMakeLists.txt`: a function newer than the deployment target, which the iOS workflows (target
+13) can find and the macOS ones, built for the SDK's own version, cannot.
 
 The arm builders run out of memory above 4 concurrent compiles, so those workflows pass `jobs = 4`.

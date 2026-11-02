@@ -264,6 +264,14 @@ if(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
         set(deps_CFLAGS "${deps_CFLAGS} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
         set(deps_CXXFLAGS "${deps_CXXFLAGS} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
     endif()
+
+    # A call to a function newer than the deployment target, outside __builtin_available, is null on
+    # the older OS.  Clang already warns about it, but in a dependency's build output nobody reads,
+    # so make it an error.  Configure checks that include the SDK's headers then see such a function
+    # as missing, which is the right answer.  CMake-based deps do not take deps_CFLAGS, so for them
+    # check-weak-imports in test/ is the only check.
+    set(deps_CFLAGS "${deps_CFLAGS} -Werror=unguarded-availability-new")
+    set(deps_CXXFLAGS "${deps_CXXFLAGS} -Werror=unguarded-availability-new")
 endif()
 
 # Fold the Apple -arch/-isysroot flags into the base compile flags so that *every* dependency picks

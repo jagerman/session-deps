@@ -99,6 +99,37 @@ if(TARGET sessiondep::gnutls)
     target_compile_features(deps-test-gnutls PRIVATE cxx_std_20)
 endif()
 
+# Every archive the recipes produce, found by walking the link interface rather than by listing the
+# destdir, so that each comes with the target that builds it.
+set(dep_archives)
+set(seen)
+set(queue ${dep_targets})
+while(queue)
+    list(POP_FRONT queue item)
+    if(item MATCHES "^\\$<LINK_ONLY:(.*)>$")
+        set(item "${CMAKE_MATCH_1}")
+    endif()
+    if(NOT TARGET "${item}" OR item IN_LIST seen)
+        continue()
+    endif()
+    list(APPEND seen ${item})
+
+    get_target_property(alias ${item} ALIASED_TARGET)
+    if(alias)
+        list(APPEND queue ${alias})
+        continue()
+    endif()
+    get_target_property(type ${item} TYPE)
+    get_target_property(imported ${item} IMPORTED)
+    if(type STREQUAL "STATIC_LIBRARY" AND imported)
+        list(APPEND dep_archives ${item})
+    endif()
+    get_target_property(linked ${item} INTERFACE_LINK_LIBRARIES)
+    if(linked)
+        list(APPEND queue ${linked})
+    endif()
+endwhile()
+
 # Our archives end up inside shared objects -- libsession in an Android .so, an iOS framework, a Node
 # addon -- so every object in them has to be position-independent.  deps-test is an executable, and a
 # PIE-default compiler produces code that links into one fine but not into a shared object, so link
@@ -111,36 +142,7 @@ endif()
 if(NOT APPLE AND NOT WIN32)
     add_custom_target(check-pic)
 
-    set(pic_archives)
-    set(seen)
-    set(queue ${dep_targets})
-    while(queue)
-        list(POP_FRONT queue item)
-        if(item MATCHES "^\\$<LINK_ONLY:(.*)>$")
-            set(item "${CMAKE_MATCH_1}")
-        endif()
-        if(NOT TARGET "${item}" OR item IN_LIST seen)
-            continue()
-        endif()
-        list(APPEND seen ${item})
-
-        get_target_property(alias ${item} ALIASED_TARGET)
-        if(alias)
-            list(APPEND queue ${alias})
-            continue()
-        endif()
-        get_target_property(type ${item} TYPE)
-        get_target_property(imported ${item} IMPORTED)
-        if(type STREQUAL "STATIC_LIBRARY" AND imported)
-            list(APPEND pic_archives ${item})
-        endif()
-        get_target_property(linked ${item} INTERFACE_LINK_LIBRARIES)
-        if(linked)
-            list(APPEND queue ${linked})
-        endif()
-    endwhile()
-
-    foreach(archive IN LISTS pic_archives)
+    foreach(archive IN LISTS dep_archives)
         get_target_property(location ${archive} IMPORTED_LOCATION)
         get_filename_component(name "${location}" NAME_WE)
         add_library(pic-check-${name} SHARED EXCLUDE_FROM_ALL pic-check.c)
@@ -153,6 +155,40 @@ if(NOT APPLE AND NOT WIN32)
         add_dependencies(check-pic pic-check-${name})
     endforeach()
 
-    list(LENGTH pic_archives pic_count)
+    list(LENGTH dep_archives pic_count)
     message(STATUS "session-deps test: check-pic covers ${pic_count} archives")
+endif()
+
+# A function the SDK declares as newer than the deployment target is weakly imported, and is null
+# when called on an older OS.  Autoconf's link tests cannot see availability, so a configure check
+# finds such a function and the library then calls it unconditionally: pipe2 in libevent crashed
+# every iOS < 27 device at the first event loop.  Nothing at build or link time objects, so list
+# what every archive weakly imports and fail on anything not known to be guarded.
+#
+# A weak import looks the same whether or not its call is behind __builtin_available, so an
+# allowlisted symbol is trusted only in the archives named for it: the same function called
+# unguarded from another library still fails.  Entries are archive:symbol regular expressions.
+#
+# Not built by default; CI runs it after the build.  It finds nothing when the deployment target is
+# the SDK's own version.
+if(APPLE)
+    set(weak_import_allowed
+        # The SDK's own FD_SET checks this for null before calling it.
+        ".*:___darwin_check_fd_set_overflow"
+    )
+
+    set(weak_import_archives)
+    foreach(archive IN LISTS dep_archives)
+        get_target_property(location ${archive} IMPORTED_LOCATION)
+        list(APPEND weak_import_archives "${location}")
+    endforeach()
+
+    add_custom_target(check-weak-imports
+        COMMAND ${CMAKE_COMMAND} "-DNM=${CMAKE_NM}" "-DARCHIVES=${weak_import_archives}"
+            "-DALLOWED=${weak_import_allowed}" -P ${CMAKE_CURRENT_LIST_DIR}/check-weak-imports.cmake
+        VERBATIM)
+    add_dependencies(check-weak-imports ${dep_archives})
+
+    list(LENGTH dep_archives weak_import_count)
+    message(STATUS "session-deps test: check-weak-imports covers ${weak_import_count} archives")
 endif()
