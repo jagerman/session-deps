@@ -57,8 +57,8 @@ Functions, all in `deps/StaticBuild.cmake` unless noted:
   handing to a foreign build system's `LIBS=`.
 - `sessiondep_expand_urls(out file mirrors...)` — applies `LOCAL_MIRROR`.
 - `sessiondep_nasm_missing(out name slower)` — for a recipe with x86 assembly: TRUE when the target
-  is x86 and nasm is absent, warning that `name` will be slower.  Warned from the recipe, not up
-  front, so projects that never build such a recipe never hear about nasm.
+  is x86 and nasm is absent, which is fatal unless `SESSIONDEPS_ALLOW_NO_NASM` is on.  Checked from
+  the recipe, not up front, so projects that never build such a recipe never need nasm.
 
 Build settings come from promoted cache variables, not from computing your own: `sessiondeps_cc`,
 `sessiondeps_cxx`, `sessiondeps_CFLAGS`, `sessiondeps_CXXFLAGS`, `sessiondeps_ldflags`,

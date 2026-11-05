@@ -115,22 +115,31 @@ function(sessiondep_bundle name)
 endfunction()
 
 
+option(SESSIONDEPS_ALLOW_NO_NASM
+    "Without nasm, build x86 dependencies without their much faster assembly instead of failing" OFF)
+
 # For a recipe with hand-written x86 assembly that nasm assembles: sets `out_var` TRUE when the
 # target is x86 and there is no nasm, so the recipe must turn its assembly off.  Such a build falls
 # back to plain C -- building and working correctly, just several times slower, with the explanation
 # buried in one dependency's configure output.  That is exactly the kind of regression that ships
-# unnoticed, so it is said loudly here, naming the recipe (`name`) and what gets slower (`slower`).
+# unnoticed, so it is fatal unless SESSIONDEPS_ALLOW_NO_NASM opts in, and even then warns, naming
+# the recipe (`name`) and what gets slower (`slower`).
 #
 # Called from the recipe rather than run once up front so that only a build that actually includes
-# such a recipe hears about nasm: most projects using session-deps never build one.
+# such a recipe needs nasm: most projects using session-deps never build one.
 function(sessiondep_nasm_missing out_var name slower)
     set(missing FALSE)
     if(sessiondeps_cpu_family MATCHES "^(x86|x86_64)$")
         find_program(SESSIONDEPS_NASM NAMES nasm)
         if(NOT SESSIONDEPS_NASM)
             set(missing TRUE)
+            if(NOT SESSIONDEPS_ALLOW_NO_NASM)
+                message(FATAL_ERROR "nasm was not found, but ${name} needs it for its x86 assembly, "
+                    "without which ${slower} is markedly slower.  Install nasm, or configure with "
+                    "-DSESSIONDEPS_ALLOW_NO_NASM=ON to build without it.")
+            endif()
             message(WARNING "nasm was not found: ${name} will be built without its x86 assembly, "
-                "which makes ${slower} markedly slower.  Install nasm.")
+                "which makes ${slower} markedly slower.")
         endif()
     endif()
     set(${out_var} ${missing} PARENT_SCOPE)

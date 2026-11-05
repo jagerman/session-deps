@@ -49,6 +49,13 @@ used.  This option has no effect when the global `SESSIONDEPS_STATIC` option is 
 
 Enabled or disable LTO for static dependency builds, where supported.
 
+### `SESSIONDEPS_ALLOW_NO_NASM=OFF/ON`
+
+Building libjpeg-turbo or dav1d for an x86 target needs `nasm` for their hand-written assembly, and
+configuring fails without it.  Turning this on builds them without it instead, with a warning: they
+work, but JPEG and AVIF decoding is several times slower, so never use it for a build that ships.
+Other architectures never need nasm, and nor does a project that builds neither library.
+
 ### `LIBHEIF_WITH_LIBDE265=OFF/ON`
 
 Off by default, so a static libheif decodes AVIF (AV1) but not HEIC (HEVC).  HEVC is covered by

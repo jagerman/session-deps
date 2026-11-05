@@ -34,6 +34,7 @@ build_tools = [
     "unzip",
     "python3",
     "ninja-build",
+    "nasm",
 ]
 
 default_cmake = {
