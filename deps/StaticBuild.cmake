@@ -115,6 +115,28 @@ function(sessiondep_bundle name)
 endfunction()
 
 
+# For a recipe with hand-written x86 assembly that nasm assembles: sets `out_var` TRUE when the
+# target is x86 and there is no nasm, so the recipe must turn its assembly off.  Such a build falls
+# back to plain C -- building and working correctly, just several times slower, with the explanation
+# buried in one dependency's configure output.  That is exactly the kind of regression that ships
+# unnoticed, so it is said loudly here, naming the recipe (`name`) and what gets slower (`slower`).
+#
+# Called from the recipe rather than run once up front so that only a build that actually includes
+# such a recipe hears about nasm: most projects using session-deps never build one.
+function(sessiondep_nasm_missing out_var name slower)
+    set(missing FALSE)
+    if(sessiondeps_cpu_family MATCHES "^(x86|x86_64)$")
+        find_program(SESSIONDEPS_NASM NAMES nasm)
+        if(NOT SESSIONDEPS_NASM)
+            set(missing TRUE)
+            message(WARNING "nasm was not found: ${name} will be built without its x86 assembly, "
+                "which makes ${slower} markedly slower.  Install nasm.")
+        endif()
+    endif()
+    set(${out_var} ${missing} PARENT_SCOPE)
+endfunction()
+
+
 set(deps_cross_host "")
 set(deps_cross_rc "")
 if(CMAKE_CROSSCOMPILING)
@@ -353,24 +375,6 @@ endif()
 # undone the patch.
 set(deps_patch patch -N -f)
 
-# libjpeg-turbo and dav1d both carry hand-written x86 assembly that nasm assembles, and both fall
-# back to plain C without it -- building and working correctly, just several times slower, with the
-# explanation buried in one dependency's configure output.  That is exactly the kind of regression
-# that ships unnoticed, so the check happens once, here, and says so loudly.
-#
-# Only x86 is affected: on Arm, dav1d's assembly goes through the C compiler and libjpeg-turbo uses
-# intrinsics, neither of which wants nasm.
-set(deps_no_x86_asm FALSE)
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^([Xx]86_64|[Aa][Mm][Dd]64|i[3-6]86)$"
-        OR ARCH_TRIPLET MATCHES "^(x86_64|i[3-6]86)")
-    find_program(SESSIONDEPS_NASM NAMES nasm)
-    if(NOT SESSIONDEPS_NASM)
-        set(deps_no_x86_asm TRUE)
-        message(WARNING "nasm was not found: libjpeg-turbo and dav1d will be built without their "
-            "x86 assembly, which makes JPEG and AVIF decoding markedly slower.  Install nasm.")
-    endif()
-endif()
-
 # Whether the target's C library lacks gettext or iconv, which glib needs and the proxy-libintl and
 # libiconv recipes provide.  iconv is only wanted from them off Windows, where glib bundles
 # win_iconv.c, and off Apple, whose system libiconv is a public dylib.  The checks run against the
@@ -460,6 +464,26 @@ if(CMAKE_CROSSCOMPILING AND NOT CMAKE_SYSTEM_PROCESSOR AND _sdep_target_cpu)
     list(APPEND deps_cmake_toolchain_args "-DCMAKE_SYSTEM_PROCESSOR=${_sdep_target_cpu}")
 endif()
 
+# The target CPU in meson's cpu_family vocabulary, which is neither cmake's spelling (which also
+# varies by host OS: AMD64 on Windows, arm64 on macOS) nor the triplet's.  The meson cross file needs
+# it, and so do recipes whose upstream has optimised code for only some architectures.  Empty for an
+# architecture not listed here, which only a cross build treats as an error.
+string(TOLOWER "${_sdep_target_cpu}" _sdep_target_cpu_lc)
+set(deps_cpu_family "")
+set(_sdep_endian little)
+if(_sdep_target_cpu_lc MATCHES "^(x86_64|amd64)$")
+    set(deps_cpu_family x86_64)
+elseif(_sdep_target_cpu_lc MATCHES "^i[3-6]86$")
+    set(deps_cpu_family x86)
+elseif(_sdep_target_cpu_lc MATCHES "^(aarch64|arm64)")
+    set(deps_cpu_family aarch64)
+elseif(_sdep_target_cpu_lc MATCHES "^arm")
+    set(deps_cpu_family arm)
+elseif(_sdep_target_cpu_lc STREQUAL "s390x")
+    set(deps_cpu_family s390x)
+    set(_sdep_endian big)
+endif()
+
 # meson has no equivalent of autoconf's --host: a cross build is described entirely by a cross file
 # naming the target machine and the tools to reach it, so we have to write one.  Generated here, at
 # configure time, rather than per-recipe, because every meson dep needs the same one.
@@ -495,23 +519,8 @@ if(CMAKE_CROSSCOMPILING)
         string(TOLOWER "${CMAKE_SYSTEM_NAME}" _sdep_meson_system)
     endif()
 
-    # meson matches cpu_family against its own fixed vocabulary, which is neither cmake's spelling
-    # nor the triplet's, so the triplet gets translated rather than passed through.
-    set(_sdep_meson_cpu "${_sdep_target_cpu}")
-    set(_sdep_meson_endian little)
-    if(_sdep_meson_cpu MATCHES "^(x86_64|amd64)$")
-        set(_sdep_meson_cpu_family x86_64)
-    elseif(_sdep_meson_cpu MATCHES "^i[3-6]86$")
-        set(_sdep_meson_cpu_family x86)
-    elseif(_sdep_meson_cpu MATCHES "^(aarch64|arm64)")
-        set(_sdep_meson_cpu_family aarch64)
-    elseif(_sdep_meson_cpu MATCHES "^arm")
-        set(_sdep_meson_cpu_family arm)
-    elseif(_sdep_meson_cpu STREQUAL "s390x")
-        set(_sdep_meson_cpu_family s390x)
-        set(_sdep_meson_endian big)
-    else()
-        message(FATAL_ERROR "Don't know how to name cpu '${_sdep_meson_cpu}' for a meson cross file")
+    if(NOT deps_cpu_family)
+        message(FATAL_ERROR "Don't know how to name cpu '${_sdep_target_cpu}' for a meson cross file")
     endif()
 
     # deps_cc can carry a compiler launcher ("ccache gcc"); meson wants that as a list.
@@ -550,9 +559,9 @@ pkg-config = 'pkg-config'
 ${_sdep_meson_extra_bins}
 [host_machine]
 system = '${_sdep_meson_system}'
-cpu_family = '${_sdep_meson_cpu_family}'
-cpu = '${_sdep_meson_cpu}'
-endian = '${_sdep_meson_endian}'
+cpu_family = '${deps_cpu_family}'
+cpu = '${_sdep_target_cpu}'
+endian = '${_sdep_endian}'
 ${_sdep_meson_host_extra}")
 endif()
 
@@ -561,7 +570,7 @@ endif()
 foreach(var IN ITEMS
         cc cxx CFLAGS CXXFLAGS cxx_stdlib ldflags make patch cross_host raw_cross_host cross_rc
         android_machine cmake_osx_args cmake_toolchain_args
-        meson ninja meson_missing meson_cross pkg_config_libdir pkg_config_env no_x86_asm need_libintl
+        meson ninja meson_missing meson_cross pkg_config_libdir pkg_config_env cpu_family need_libintl
         need_libiconv)
     if(DEFINED deps_${var})
         set(sessiondeps_${var} "${deps_${var}}" CACHE INTERNAL "" FORCE)

@@ -5,8 +5,9 @@ set(LIBJPEG_HASH SHA512=13536db56c16e5364690ae2d31343a203e3b653c853c1f5314d36c8e
 
 # Without REQUIRE_SIMD a build that cannot assemble its x86 kernels prints a warning and produces a
 # markedly slower library anyway, so when nasm is present a SIMD failure should stop the build.
+sessiondep_nasm_missing(libjpeg_no_nasm libjpeg-turbo "JPEG decoding")
 set(libjpeg_require_simd FALSE)
-if(NOT sessiondeps_no_x86_asm)
+if(NOT libjpeg_no_nasm)
     set(libjpeg_require_simd TRUE)
 endif()
 

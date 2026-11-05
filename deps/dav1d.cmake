@@ -4,9 +4,11 @@ set(DAV1D_SOURCE dav1d-${DAV1D_VERSION}.tar.xz)
 set(DAV1D_HASH SHA512=75ab7c922bc9647d73534c9f6c95a514748557adbf7a4debf95eee52ef1db681012cbaad165a46141d904cdd01c1e6319cdea33d254afb5c6b3d968679e55b98)
 
 # dav1d treats a missing nasm as a hard error rather than falling back, so asm has to be turned off
-# explicitly when there is none; StaticBuild.cmake has already warned about the performance cost.
+# explicitly when there is none.  Only x86 needs nasm: elsewhere dav1d's assembly goes through the C
+# compiler.
+sessiondep_nasm_missing(dav1d_no_nasm dav1d "AVIF decoding")
 set(dav1d_asm true)
-if(sessiondeps_no_x86_asm)
+if(dav1d_no_nasm)
     set(dav1d_asm false)
 endif()
 

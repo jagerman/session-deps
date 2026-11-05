@@ -56,12 +56,17 @@ Functions, all in `deps/StaticBuild.cmake` unless noted:
 - `sessiondep_link_flags(out targets...)` — flattens cmake targets to a linker argument list, for
   handing to a foreign build system's `LIBS=`.
 - `sessiondep_expand_urls(out file mirrors...)` — applies `LOCAL_MIRROR`.
+- `sessiondep_nasm_missing(out name slower)` — for a recipe with x86 assembly: TRUE when the target
+  is x86 and nasm is absent, warning that `name` will be slower.  Warned from the recipe, not up
+  front, so projects that never build such a recipe never hear about nasm.
 
 Build settings come from promoted cache variables, not from computing your own: `sessiondeps_cc`,
 `sessiondeps_cxx`, `sessiondeps_CFLAGS`, `sessiondeps_CXXFLAGS`, `sessiondeps_ldflags`,
-`sessiondeps_make`, `sessiondeps_patch`, `sessiondeps_cross_host`, `sessiondeps_cross_rc`.  Anything
-set as `deps_foo` near the end of `StaticBuild.cmake` is promoted to `sessiondeps_foo`; add to the
-`foreach` promotion list when introducing one.
+`sessiondeps_make`, `sessiondeps_patch`, `sessiondeps_cross_host`, `sessiondeps_cross_rc`, and
+`sessiondeps_cpu_family`, the target CPU in meson's vocabulary (`x86_64`, `x86`, `aarch64`, `arm`,
+`s390x`; empty for anything else) for recipes whose upstream optimises only some architectures.
+Anything set as `deps_foo` near the end of `StaticBuild.cmake` is promoted to `sessiondeps_foo`; add
+to the `foreach` promotion list when introducing one.
 
 `CONFIGURE_COMMAND` takes one of three forms: a literal command (the default is `./configure`),
 `DEFAULT_CMAKE` followed by `-D` options, or `DEFAULT_MESON` followed by `-D` options.  The latter
@@ -75,9 +80,9 @@ tarballs.  Subprojects already vendored in the tarball (glib ships gvdb that way
 
 meson has no `--host`, so a cross build is described by a cross file, generated once in
 `StaticBuild.cmake` as `sessiondeps_meson_cross`.  Its `cpu_family` has to come from meson's own
-fixed vocabulary, which is neither cmake's spelling nor the triplet's, so `ARCH_TRIPLET` is
-translated rather than passed through; an unrecognised architecture is a fatal error rather than a
-guess.
+fixed vocabulary, which is neither cmake's spelling nor the triplet's, so it is
+`sessiondeps_cpu_family`; an architecture that leaves that empty is a fatal error in a cross build
+rather than a guess.
 
 **OpenSSL does not take `--host`.**  It picks its target from `POSIX::uname()` with no environment
 override, so a cross build must name the target (`./Configure mingw64`) and pass the cross `AR` and
